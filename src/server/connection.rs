@@ -3009,7 +3009,7 @@ impl Connection {
                         .await;
                 }
                 return true;
-            } else if self.is_recent_session(false) {
+            } else if self.is_recent_session(false) && !crate::ersm::support::requires_click() {
                 if !self.send_logon_response_and_keep_alive().await {
                     return false;
                 }
@@ -3036,6 +3036,16 @@ impl Connection {
                     self.try_start_cm(lr.my_id, lr.my_name, false);
                 } else {
                     self.update_failure_with_scope(failure, true, 0, FailureScope::Default);
+                    if crate::ersm::support::requires_click() {
+                        self.try_start_cm(lr.my_id, lr.my_name, false);
+                        if hbb_common::get_version_number(&lr.version)
+                            >= hbb_common::get_version_number("1.2.0")
+                        {
+                            self.send_login_error(crate::client::LOGIN_MSG_NO_PASSWORD_ACCESS)
+                                .await;
+                        }
+                        return true;
+                    }
                     if !self.send_logon_response_and_keep_alive().await {
                         return false;
                     }

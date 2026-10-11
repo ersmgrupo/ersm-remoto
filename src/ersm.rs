@@ -1,6 +1,8 @@
 // ERSM Remoto: configuration fixed at build time (replica/architecture.md, change 2).
 // Applied before the custom-client config so every flavour talks only to ERSM's own
 // rendezvous/relay server and never offers to update itself from rustdesk.com.
+pub mod support;
+
 use base::config::keys;
 use hbb_common::config;
 
@@ -34,6 +36,9 @@ pub fn apply_fixed_config() {
     ] {
         builtin.insert(k.to_owned(), "Y".to_owned());
     }
+    drop(builtin);
+
+    support::apply_support_settings();
 }
 
 // The server is fixed above; a renamed executable ("…host=…,key=….exe") must not redirect it.
@@ -52,8 +57,13 @@ mod tests {
             config::Config::get_rendezvous_server().split(':').next(),
             Some(RENDEZVOUS_SERVER)
         );
-        assert_eq!(config::Config::get_option(keys::OPTION_KEY), SERVER_PUBLIC_KEY);
-        assert!(!config::Config::get_bool_option(keys::OPTION_ALLOW_AUTO_UPDATE));
+        assert_eq!(
+            config::Config::get_option(keys::OPTION_KEY),
+            SERVER_PUBLIC_KEY
+        );
+        assert!(!config::Config::get_bool_option(
+            keys::OPTION_ALLOW_AUTO_UPDATE
+        ));
         assert_eq!(*config::APP_NAME.read().unwrap(), APP_NAME);
     }
 
