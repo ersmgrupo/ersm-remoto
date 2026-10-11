@@ -2508,6 +2508,10 @@ pub fn is_incoming_only() -> SyncReturn<bool> {
     SyncReturn(config::is_incoming_only())
 }
 
+pub fn main_get_ersm_support_status() -> SyncReturn<String> {
+    SyncReturn(crate::ersm::support::status_json())
+}
+
 pub fn is_outgoing_only() -> SyncReturn<bool> {
     SyncReturn(config::is_outgoing_only())
 }

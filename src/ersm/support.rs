@@ -19,7 +19,7 @@ use hbb_common::{
     ResultType,
 };
 use serde_json::{json, Value};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 const EXE_PREFIX: &str = "ersm-remoto-soporte";
 const TICKET_PREFIX: &str = "ersm-remoto-soporte_";
@@ -62,6 +62,38 @@ pub fn ticket_from_name(name: &str) -> Option<String> {
     }
 }
 
+// What the support window shows (flutter/lib/ersm/support_panel.dart reads it through
+// main_get_ersm_support_status). Phases: starting, no_ticket, connecting, joining, waiting,
+// connected, ended, error.
+struct Status {
+    phase: &'static str,
+    detail: String,
+    tech: String,
+}
+
+static STATUS: RwLock<Status> = RwLock::new(Status {
+    phase: "starting",
+    detail: String::new(),
+    tech: String::new(),
+});
+
+fn set_phase(phase: &'static str, detail: &str) {
+    let mut status = STATUS.write().unwrap();
+    status.phase = phase;
+    status.detail = detail.to_owned();
+}
+
+pub fn status_json() -> String {
+    let status = STATUS.read().unwrap();
+    json!({
+        "support": is_support_mode(),
+        "phase": status.phase,
+        "detail": status.detail,
+        "tech": status.tech,
+    })
+    .to_string()
+}
+
 // A correct password must not open the session by itself: the user always clicks «Permitir».
 pub fn requires_click() -> bool {
     is_support_mode()
@@ -78,6 +110,12 @@ pub fn apply_support_settings() {
     ] {
         settings.insert(k.to_owned(), v.to_owned());
     }
+    drop(settings);
+    // Incoming-only: the compact window without the outgoing-connection pane.
+    config::HARD_SETTINGS
+        .write()
+        .unwrap()
+        .insert("conn-type".to_owned(), "incoming".to_owned());
 }
 
 pub fn spawn_join() {
@@ -94,10 +132,19 @@ pub fn spawn_join() {
 async fn run_join() -> ResultType<()> {
     let name = exe_file_name();
     let Some(ticket) = ticket_from_name(&name) else {
+        set_phase("no_ticket", "");
         bail!("no ticket in the executable name {name:?}");
     };
-    wait_registered().await?;
+    set_phase("connecting", "");
+    if let Err(e) = wait_registered().await {
+        set_phase(
+            "error",
+            "No se puede conectar con el servidor de ERSM. Comprueba tu conexión a internet.",
+        );
+        return Err(e);
+    }
 
+    set_phase("joining", "");
     let nonce = crate::common::encode64(randombytes::randombytes(32))
         .replace('+', "-")
         .replace('/', "_")
@@ -108,22 +155,50 @@ async fn run_join() -> ResultType<()> {
         "client_nonce": nonce,
         "client_info": client_info(),
     });
-    let joined = post_with_retry("/api/v1/join/redeem", &redeem).await?;
+    let joined = match post_with_retry("/api/v1/join/redeem", &redeem).await {
+        Ok(v) => v,
+        Err(user_message) => {
+            set_phase("error", &user_message);
+            bail!("redeem failed: {user_message}");
+        }
+    };
     let session_id = field(&joined, "session_id")?;
     let join_secret = field(&joined, "join_secret")?;
     let tech_pubkey = crate::common::decode64(field(&joined, "tech_pubkey")?)?;
     let Some(tech_pubkey) = box_::PublicKey::from_slice(&tech_pubkey) else {
+        set_phase("error", "Respuesta del servidor no válida.");
         bail!("invalid technician public key");
     };
-    log::info!(
-        "ERSM support: joined session {session_id} with {}",
-        joined["tech_name"].as_str().unwrap_or("?")
-    );
+    let tech = joined["tech_name"]
+        .as_str()
+        .unwrap_or("IT de ERSM")
+        .to_owned();
+    log::info!("ERSM support: joined session {session_id} with {tech}");
+    STATUS.write().unwrap().tech = tech;
 
     let mut published = (String::new(), String::new());
+    let mut had_session = false;
     loop {
+        if authorized_remote_sessions() > 0 {
+            if !had_session {
+                had_session = true;
+                set_phase("connected", "");
+            }
+        } else if had_session {
+            set_phase("ended", "");
+            let end = json!({
+                "session_id": &session_id,
+                "join_secret": &join_secret,
+                "reason": "user",
+            });
+            if let Err(e) = post_json("/api/v1/join/end", &end).await {
+                log::warn!("ERSM support: end failed: {e}");
+            }
+            return Ok(());
+        }
+
         let current = (Config::get_id(), password::temporary_password());
-        if current != published && !current.0.is_empty() && !current.1.is_empty() {
+        if !had_session && current != published && !current.0.is_empty() && !current.1.is_empty() {
             let sealed = sealedbox::seal(current.1.as_bytes(), &tech_pubkey);
             let attach = json!({
                 "session_id": &session_id,
@@ -135,9 +210,11 @@ async fn run_join() -> ResultType<()> {
                 Ok((204, _)) => {
                     log::info!("ERSM support: published ID and sealed one-time password");
                     published = current;
+                    set_phase("waiting", "");
                 }
                 Ok((403 | 409, _)) => {
                     log::info!("ERSM support: session closed on the server");
+                    set_phase("ended", "");
                     return Ok(());
                 }
                 Ok((status, body)) => log::warn!("ERSM support: attach answered {status}: {body}"),
@@ -146,6 +223,15 @@ async fn run_join() -> ResultType<()> {
         }
         sleep(Duration::from_secs(2)).await;
     }
+}
+
+fn authorized_remote_sessions() -> usize {
+    crate::server::AUTHED_CONNS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|c| c.conn_type == crate::server::AuthConnType::Remote)
+        .count()
 }
 
 async fn wait_registered() -> ResultType<()> {
@@ -183,16 +269,18 @@ fn field(v: &Value, name: &str) -> ResultType<String> {
 }
 
 // Redeem is idempotent for the same client_nonce, so network errors and 5xx are retried.
-async fn post_with_retry(path: &str, body: &Value) -> ResultType<Value> {
+// The error is the message for the user: the server's own (already in Spanish) or a generic one.
+async fn post_with_retry(path: &str, body: &Value) -> Result<Value, String> {
     let mut wait = Duration::from_secs(2);
     for attempt in 1..=5 {
         match post_json(path, body).await {
             Ok((200, v)) => return Ok(v),
             Ok((status, v)) if status < 500 => {
-                bail!(
-                    "{path} answered {status}: {}",
-                    v["message"].as_str().unwrap_or("?")
-                )
+                log::warn!("ERSM support: {path} answered {status}: {v}");
+                return Err(v["message"]
+                    .as_str()
+                    .unwrap_or("El servidor de ERSM ha rechazado la conexión.")
+                    .to_owned());
             }
             Ok((status, _)) => {
                 log::warn!("ERSM support: {path} answered {status} (attempt {attempt})")
@@ -202,7 +290,7 @@ async fn post_with_retry(path: &str, body: &Value) -> ResultType<Value> {
         sleep(wait).await;
         wait *= 2;
     }
-    bail!("{path} kept failing")
+    Err("No se puede contactar con el servicio de soporte de ERSM. Llama a IT.".to_owned())
 }
 
 // HTTPS only with certificate checks; plain HTTP is accepted only when a test build points ERSM_API_URL at it.

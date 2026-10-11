@@ -13,6 +13,7 @@ import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
+import 'package:flutter_hbb/ersm/support_panel.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -85,13 +86,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           alignment: Alignment.center,
           child: loadPowered(context),
         ),
-      Align(
-        alignment: Alignment.center,
-        child: loadLogo(),
-      ),
-      buildTip(context),
-      if (!isOutgoingOnly) buildIDBoard(context),
-      if (!isOutgoingOnly) buildPasswordBoard(context),
+      if (!ersmIsSupportMode())
+        Align(
+          alignment: Alignment.center,
+          child: loadLogo(),
+        ),
+      if (!ersmIsSupportMode()) buildTip(context),
+      if (!isOutgoingOnly && !ersmIsSupportMode()) buildIDBoard(context),
+      if (!isOutgoingOnly && !ersmIsSupportMode()) buildPasswordBoard(context),
+      if (ersmIsSupportMode())
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 300),
+          child: const ErsmSupportPanel(),
+        ),
+      if (!ersmIsSupportMode())
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
