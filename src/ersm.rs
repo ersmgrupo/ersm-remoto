@@ -1,4 +1,4 @@
-// ERSM Remoto: configuration fixed at build time (replica/architecture.md, change 2).
+// ERSM Desk: configuration fixed at build time (replica/architecture.md, change 2).
 // Applied before the custom-client config so every flavour talks only to ERSM's own
 // rendezvous/relay server and never offers to update itself from rustdesk.com.
 pub mod support;
@@ -6,7 +6,7 @@ pub mod support;
 use base::config::keys;
 use hbb_common::config;
 
-pub const APP_NAME: &str = "ERSM Remoto";
+pub const APP_NAME: &str = "ERSM Desk";
 pub const RENDEZVOUS_SERVER: &str = "host.ersmgrupo.org";
 // Public key of hbbs/hbbr on host.ersmgrupo.org (id_ed25519.pub). Public by design.
 pub const SERVER_PUBLIC_KEY: &str = "+KVuWKGVLFsei1T9Ph0MW0J4Mln2HfBmUuueVNzhZK8=";

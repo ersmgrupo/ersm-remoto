@@ -1,5 +1,5 @@
-// ERSM Remoto support mode (replica/architecture.md, «El broker de códigos»; contract in replica/api-m1.md).
-// The portable client served by the portal is named ERSM-Remoto-Soporte_<ticket>.exe. In that mode it
+// ERSM Desk support mode (replica/architecture.md, «El broker de códigos»; contract in replica/api-m1.md).
+// The portable client served by the portal is named ERSM-Desk-Soporte_<ticket>.exe. In that mode it
 // redeems the ticket once, publishes its ID and its one-time password sealed for the technician's key
 // (re-publishing when the one-time password rotates), and every incoming login needs the user's click.
 use base::config::keys;
@@ -21,8 +21,8 @@ use hbb_common::{
 use serde_json::{json, Value};
 use std::sync::{OnceLock, RwLock};
 
-const EXE_PREFIX: &str = "ersm-remoto-soporte";
-const TICKET_PREFIX: &str = "ersm-remoto-soporte_";
+const EXE_PREFIX: &str = "ersm-desk-soporte";
+const TICKET_PREFIX: &str = "ersm-desk-soporte_";
 const DEFAULT_API_URL: &str = "https://remoto.ersmgrupo.org";
 const REGISTER_TIMEOUT: Duration = Duration::from_secs(180);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -50,7 +50,7 @@ pub fn is_support_mode() -> bool {
     *SUPPORT.get_or_init(|| exe_file_name().to_ascii_lowercase().starts_with(EXE_PREFIX))
 }
 
-// Tolerates what browsers append to repeated downloads, e.g. "ERSM-Remoto-Soporte_<ticket> (1).exe".
+// Tolerates what browsers append to repeated downloads, e.g. "ERSM-Desk-Soporte_<ticket> (1).exe".
 pub fn ticket_from_name(name: &str) -> Option<String> {
     let lower = name.to_ascii_lowercase();
     let start = lower.find(TICKET_PREFIX)? + TICKET_PREFIX.len();
@@ -322,15 +322,15 @@ mod tests {
     fn ticket_is_read_from_the_downloaded_name() {
         let t = "0123456789abcdef0123456789abcdef";
         assert_eq!(
-            ticket_from_name(&format!("ERSM-Remoto-Soporte_{t}.exe")).as_deref(),
+            ticket_from_name(&format!("ERSM-Desk-Soporte_{t}.exe")).as_deref(),
             Some(t)
         );
         assert_eq!(
-            ticket_from_name(&format!("ERSM-Remoto-Soporte_{t} (1).exe")).as_deref(),
+            ticket_from_name(&format!("ERSM-Desk-Soporte_{t} (1).exe")).as_deref(),
             Some(t)
         );
-        assert_eq!(ticket_from_name("ERSM-Remoto-Soporte.exe"), None);
-        assert_eq!(ticket_from_name("ERSM-Remoto-Soporte_xyz.exe"), None);
+        assert_eq!(ticket_from_name("ERSM-Desk-Soporte.exe"), None);
+        assert_eq!(ticket_from_name("ERSM-Desk-Soporte_xyz.exe"), None);
         assert_eq!(ticket_from_name("rustdesk.exe"), None);
     }
 }

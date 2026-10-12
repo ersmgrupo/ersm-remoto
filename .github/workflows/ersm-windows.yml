@@ -1,14 +1,14 @@
-# ERSM Remoto: compilación solo para Windows x64.
+# ERSM Desk: compilación solo para Windows x64.
 # Sale de .github/workflows/flutter-build.yml (RustDesk 1.5.0): mismos pasos y versiones,
 # sin Android/macOS/Linux/iOS/web, sin arm64, sin el servicio de firma de RustDesk
 # y subiendo el resultado como artefacto en vez de publicar una release.
-name: ERSM Remoto - Windows x64
+name: ERSM Desk - Windows x64
 
 on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: "API de ERSM Remoto fijada en el ejecutable (producción: https://remoto.ersmgrupo.org)"
+        description: "API de ERSM Desk fijada en el ejecutable (producción: https://remoto.ersmgrupo.org)"
         type: string
         default: "https://remoto.ersmgrupo.org"
 
@@ -350,10 +350,10 @@ jobs:
         run: |
           BASE_URL=${{ env.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./SignOutput
 
-      - name: Upload ERSM Remoto build (sin firmar)
+      - name: Upload ERSM Desk build (sin firmar)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ersm-remoto-windows-${{ matrix.job.arch }}-unsigned
+          name: ersm-desk-windows-${{ matrix.job.arch }}-unsigned
           path: |
             ./SignOutput/rustdesk-*.exe
             ./SignOutput/rustdesk-*.msi

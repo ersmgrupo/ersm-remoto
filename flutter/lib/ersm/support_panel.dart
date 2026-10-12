@@ -1,4 +1,4 @@
-// ERSM Remoto support mode: the whole content of the compact window (S16 start, S17 connected,
+// ERSM Desk support mode: the whole content of the compact window (S16 start, S17 connected,
 // S19 finished). Texts and states follow replica/design/components.md, §6; colours come only
 // from tokens.g.dart. The state comes from Rust (src/ersm/support.rs, status_json).
 import 'dart:async';
@@ -102,7 +102,7 @@ class _ErsmSupportPanelState extends State<ErsmSupportPanel> {
       child: Text.rich(
         TextSpan(children: const [
           TextSpan(text: 'ERSM', style: TextStyle(fontWeight: FontWeight.w700)),
-          TextSpan(text: ' Remoto · Soporte'),
+          TextSpan(text: ' Desk · Soporte'),
         ]),
         style: const TextStyle(
             color: ErsmLight.onBrandStrong, fontSize: ErsmText.lgSize),
